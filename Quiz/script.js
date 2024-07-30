@@ -1,7 +1,9 @@
+let timerInterval;
+const TIME_LIMIT = 60000; // 60 seconds in milliseconds
+let timeRemaining = TIME_LIMIT;
+let score = 0;
+const NUM_OF_QUESTIONS = 10;
 document.addEventListener("DOMContentLoaded", function () {
-    let timerInterval;
-    const TIME_LIMIT = 10000; // 60 seconds in milliseconds
-    let timeRemaining = TIME_LIMIT;
 
     const questions = [
                 {
@@ -167,7 +169,7 @@ document.addEventListener("DOMContentLoaded", function () {
             question: "Which tool would help you determine why a print job didn't print?",
             choices: [
                 "Print Manager",
-                "Printer spooler",
+                "Printer Spooler",
                 "Printer Config",
                 "Task Manager"],
             answer: "Printer spooler"
@@ -403,7 +405,6 @@ document.addEventListener("DOMContentLoaded", function () {
         const resultsDiv = document.getElementById("result");
         resultsDiv.innerHTML = "";
 
-        let score = 0;
         selectedQuestions.forEach((question, index) => {
             const selectedOption = document.querySelector(`input[name="question${index}"]:checked`);
             if (selectedOption && selectedOption.value === question.answer) {
@@ -427,14 +428,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 clearInterval(timerInterval);
                 alert("Time's up!");
                 checkAnswers(); // Automatically submit answers when time is up
+                submitResults(); // Call function to generate PDF
             } else {
                 timeRemaining -= 1000;
             }
         }, 1000);
     }
 
-    //get number of questions
-    const selectedQuestions = getRandomQuestions(10);
+    // Get number of questions
+    const selectedQuestions = getRandomQuestions(NUM_OF_QUESTIONS);
     const questionContainer = document.getElementById("questionContainer");
 
     selectedQuestions.forEach((question, index) => {
@@ -442,13 +444,57 @@ document.addEventListener("DOMContentLoaded", function () {
         questionContainer.appendChild(questionElement);
     });
 
-    const submitButton = document.createElement("button");
-    submitButton.textContent = "Submit Answers";
+    const submitButton = document.querySelector("#submit-button");
     submitButton.addEventListener("click", () => {
         clearInterval(timerInterval); // Stop the timer if user submits manually
         checkAnswers();
+        submitResults(); // Generate PDF when the button is clicked
     });
-    questionContainer.appendChild(submitButton);
 
     startTimer(TIME_LIMIT); // Start the timer
 });
+
+function submitResults() {
+    // Ensure jsPDF is loaded
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+        console.error('jsPDF is not loaded');
+        return;
+    }
+
+    // Create a new jsPDF instance
+    const doc = new jsPDF();
+
+    // Sample test information
+    const candidateName = "Test Smith";
+    const positionApplyingFor = "Backfield Engineer";
+
+    // Get the current date and time
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const dateTime = `${date} ${time}`;
+
+    // Calculate percentage
+    const percentage = (score / NUM_OF_QUESTIONS * 100).toFixed(2);
+
+    // Format time remaining
+    const minutes = Math.floor(timeRemaining / 60000);
+    const seconds = Math.floor((timeRemaining % 60000) / 1000);
+    const formattedTimeRemaining = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    // Add static content to PDF
+    doc.setFontSize(12);
+    doc.text(`Candidate Name : ${candidateName}`, 10, 10);
+    doc.text(`Date : ${dateTime}`, 10, 20);
+    doc.text(`Position Applying for: ${positionApplyingFor}`, 10, 30);
+    doc.text(`Score: ${score}/${NUM_OF_QUESTIONS} (${percentage}%)`, 10, 40);
+    doc.text(`Time Remaining : ${formattedTimeRemaining}`, 10, 50);
+
+    // Save the PDF
+    try {
+        doc.save('document.pdf');
+    } catch (error) {
+        console.error('Error saving PDF:', error);
+    }
+}
