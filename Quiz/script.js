@@ -435,9 +435,51 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     ];
 
-    function getRandomQuestions(num) {
-        const shuffled = questions.sort(() => 0.5 - Math.random());
-        return shuffled.slice(0, num);
+    const categories = ["Networking", "Software and Utilities", "Hardware", "Customer Service"];
+    const QUESTIONS_PER_CATEGORY = 5;
+
+    function groupQuestionsByCategory(questions) {
+        return questions.reduce((acc, question) => {
+            if (!acc[question.category]) {
+                acc[question.category] = [];
+            }
+            acc[question.category].push(question);
+            return acc;
+        }, {});
+    }
+
+    function getQuestionsFromEachCategory(categoryList, numQuestionsPerCategory) {
+        const groupedQuestions = groupQuestionsByCategory(questions);
+        let selectedQuestions = [];
+
+        categoryList.forEach(category => {
+            const questionsInCategory = groupedQuestions[category] || [];
+            const shuffled = questionsInCategory.sort(() => 0.5 - Math.random());
+            const selected = shuffled.slice(0, numQuestionsPerCategory);
+            selectedQuestions = selectedQuestions.concat(selected);
+        });
+
+        return selectedQuestions;
+    }
+
+    function createCategoryElement(category, questions) {
+        const categoryDiv = document.createElement("div");
+        categoryDiv.classList.add("category");
+
+        const categoryTitle = document.createElement("h2");
+        categoryTitle.textContent = `${category} Questions:`;
+        categoryDiv.appendChild(categoryTitle);
+
+        const questionCount = document.createElement("p");
+        questionCount.textContent = `[${questions.length} questions]`;
+        categoryDiv.appendChild(questionCount);
+
+        questions.forEach((question, index) => {
+            const questionElement = createQuestionElement(question, index);
+            categoryDiv.appendChild(questionElement);
+        });
+
+        return categoryDiv;
     }
 
     function createQuestionElement(questionObj, index) {
@@ -463,28 +505,16 @@ document.addEventListener("DOMContentLoaded", function () {
         return questionDiv;
     }
 
-    function checkAnswers() {
-        const resultsDiv = document.getElementById("result");
-        resultsDiv.innerHTML = "";
-
-        selectedQuestions.forEach((question, index) => {
-            const selectedOption = document.querySelector(`input[name="question${index}"]:checked`);
-            if (selectedOption && selectedOption.value === question.answer) {
-                score++;
-            }
-        });
-
-        const scoreElement = document.createElement("p");
-        scoreElement.textContent = "You got " + score + " out of " + selectedQuestions.length + " correct!";
-        resultsDiv.appendChild(scoreElement);
+    function updateTimerDisplay(minutes, seconds) {
+        const timerDisplay = document.getElementById("timerDisplay");
+        timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
     function startTimer(duration) {
-        const timerDisplay = document.getElementById("timerDisplay");
         timerInterval = setInterval(() => {
             const minutes = Math.floor(timeRemaining / 60000);
             const seconds = Math.floor((timeRemaining % 60000) / 1000);
-            timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            updateTimerDisplay(minutes, seconds);
 
             if (timeRemaining <= 0) {
                 clearInterval(timerInterval);
@@ -497,13 +527,67 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 1000);
     }
 
-    // Get number of questions
-    const selectedQuestions = getRandomQuestions(NUM_OF_QUESTIONS);
+    function checkAnswers() {
+        const resultsDiv = document.getElementById("result");
+        resultsDiv.innerHTML = "";
+
+        selectedQuestions.forEach((question, index) => {
+            const selectedOption = document.querySelector(`input[name="question${index}"]:checked`);
+            if (selectedOption && selectedOption.value === question.answer) {
+                score++;
+            }
+        });
+
+        const scoreElement = document.createElement("p");
+        scoreElement.textContent = `You got ${score} out of ${selectedQuestions.length} correct!`;
+        resultsDiv.appendChild(scoreElement);
+    }
+
+    function submitResults() {
+        const { jsPDF } = window.jspdf;
+        if (!jsPDF) {
+            console.error('jsPDF is not loaded');
+            return;
+        }
+
+        const doc = new jsPDF();
+
+        const candidateName = "Test Smith";
+        const positionApplyingFor = "Backfield Engineer";
+
+        const now = new Date();
+        const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        const dateTime = `${date} ${time}`;
+
+        const percentage = (score / selectedQuestions.length * 100).toFixed(2);
+        const minutes = Math.floor(timeRemaining / 60000);
+        const seconds = Math.floor((timeRemaining % 60000) / 1000);
+        const formattedTimeRemaining = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+        doc.setFontSize(12);
+        doc.text(`Candidate Name : ${candidateName}`, 10, 10);
+        doc.text(`Date : ${dateTime}`, 10, 20);
+        doc.text(`Position Applying for: ${positionApplyingFor}`, 10, 30);
+        doc.text(`Score: ${score}/${selectedQuestions.length} (${percentage}%)`, 10, 40);
+        doc.text(`Time Remaining : ${formattedTimeRemaining}`, 10, 50);
+
+        try {
+            doc.save('document.pdf');
+        } catch (error) {
+            console.error('Error saving PDF:', error);
+        }
+    }
+
+    const selectedQuestions = getQuestionsFromEachCategory(categories, QUESTIONS_PER_CATEGORY);
     const questionContainer = document.getElementById("questionContainer");
 
-    selectedQuestions.forEach((question, index) => {
-        const questionElement = createQuestionElement(question, index);
-        questionContainer.appendChild(questionElement);
+    categories.forEach(category => {
+        const categoryQuestions = selectedQuestions.filter(q => q.category === category);
+        if (categoryQuestions.length > 0) {
+            const categoryElement = createCategoryElement(category, categoryQuestions);
+            questionContainer.appendChild(categoryElement);
+        }
     });
 
     const submitButton = document.querySelector("#submit-button");
@@ -515,48 +599,3 @@ document.addEventListener("DOMContentLoaded", function () {
 
     startTimer(TIME_LIMIT); // Start the timer
 });
-
-function submitResults() {
-    // Ensure jsPDF is loaded
-    const { jsPDF } = window.jspdf;
-    if (!jsPDF) {
-        console.error('jsPDF is not loaded');
-        return;
-    }
-
-    // Create a new jsPDF instance
-    const doc = new jsPDF();
-
-    // Sample test information
-    const candidateName = "Test Smith";
-    const positionApplyingFor = "Backfield Engineer";
-
-    // Get the current date and time
-    const now = new Date();
-    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    const dateTime = `${date} ${time}`;
-
-    // Calculate percentage
-    const percentage = (score / NUM_OF_QUESTIONS * 100).toFixed(2);
-
-    // Format time remaining
-    const minutes = Math.floor(timeRemaining / 60000);
-    const seconds = Math.floor((timeRemaining % 60000) / 1000);
-    const formattedTimeRemaining = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-    // Add static content to PDF
-    doc.setFontSize(12);
-    doc.text(`Candidate Name : ${candidateName}`, 10, 10);
-    doc.text(`Date : ${dateTime}`, 10, 20);
-    doc.text(`Position Applying for: ${positionApplyingFor}`, 10, 30);
-    doc.text(`Score: ${score}/${NUM_OF_QUESTIONS} (${percentage}%)`, 10, 40);
-    doc.text(`Time Remaining : ${formattedTimeRemaining}`, 10, 50);
-
-    // Save the PDF
-    try {
-        doc.save('document.pdf');
-    } catch (error) {
-        console.error('Error saving PDF:', error);
-    }
-}
